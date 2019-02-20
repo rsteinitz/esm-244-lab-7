@@ -1,7 +1,7 @@
 ---
-title: "ESM 244 Lab 7 Instructor Key"
-author: "Allison Horst"
-date: "February 16, 2019"
+title: "ESM 244 Lab 7"
+author: "Ronnie Bailey-Steinitz"
+date: "2/21/2019"
 output: html_document
 ---
 
@@ -9,10 +9,9 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-## Lab 7 - More spatial business {.tabset .tabset-fade}
 
-Attach packages: 
-```{r, warning = FALSE, message = FALSE}
+0.1 Attach Packages
+```{r}
 
 library(tidyverse)
 library(tmap)
@@ -25,11 +24,12 @@ library(raster)
 library(gstat)
 library(plotKML) # for points to raster (they won't have this...just testing)
 
+
 ```
 
-###Part 1. Hawaii raster intro
-
+0.2 Read in data
 ```{r}
+###Part 1. Hawaii raster intro
 
 # Read in the raster data
 
@@ -44,25 +44,28 @@ plot(hi_chl)
 
 ```
 
+
 First: some useful functions for rasters
 
-Checking it out: 
-
+1.1 Checking it out: 
 - crs
 - reprojection
 - cropping
 - simple algebra example
-
 ```{r}
 
 hi_sst@crs # Shows CRS: NAD83
 
+#Look at elements of these data
 hi_sst@extent # Shows extent (bounds)
 
 ```
 
-Example: reprojection to WGS84
+
+1.2 Example: reprojection to WGS84
 ```{r}
+#spacing here matters! 
+#Reprojecting several things, create character string that we can refer back to
 wgs84 = "+proj=longlat +datum=WGS84 +ellps=WGS84 +no_defs" # Just have this ready to copy/paste
 
 # Reproject
@@ -70,15 +73,19 @@ hi_sst_84 = projectRaster(hi_sst, crs = wgs84, method = "bilinear")
 
 # Check the reprojection
 hi_sst_84@crs 
+hi_sst_84@extent
 
+#plot real quick
+plot(hi_sst_84)
+#you can also resample raster data to reduce the resolution/size... see next section
 ```
 
-raster::aggregate() for resampling
+1.3 raster::aggregate() for resampling
 ```{r}
 
 # Sea surface temperature: 
 sst_rs <- aggregate(hi_sst, fact = 10)
-plot(sst_rs)
+plot(sst_rs) #much more pixelated
 
 # Plot side-by-side for comparison:
 par(mfrow = c(1,2))
@@ -87,53 +94,62 @@ plot(sst_rs)
 
 ```
 
-Crop a raster: 
+1.4 Crop a raster: 
 ```{r}
-
+#what are the current extents for the reprojected raster?
 # Get these extents from hi_sst_84 (call in console to see) what the actual limits are for hi_sst_84, then decide on cropping boundaries
+hi_sst_84@extent
 
-# First create a spatial polygon
+#we can create a bounding box by which to crop
+# First create a spatial polygon - use "as" to create something in a certain format; here, as "extent"
 bounds <- as(extent(-156.2, -154.5, 18.7, 20.4), 'SpatialPolygons') # Keep in mind, this could be any polygon shape (state outline, county outline, etc.)
 
-# Reproject
+View(bounds)
+# Reproject - the crs we have for "bounds"- we want it to match the crs we have for hi_sst_84
 crs(bounds) <- crs(hi_sst_84)
 
-# Then crop: 
+# Now that these crs match, we crop: 
+#crop "hi_sst_84" raster, by the polygon "bounds"
 sst_crop <- crop(hi_sst_84, bounds)
 
-# And plot:
-plot(sst_crop)
+# And plot: to see just the cropped raster
+plot(sst_crop) #now we only have one island
 ```
 
+
+1.5 Simple raster math:
 A simple algebra example: 
 
 Let's say we're creating a nonsensical variable called "tropicality", which is the sum of the PAR + SST + 2*ChlA. How can we create a layer for tropicality? 
 
 First let's reprojeect and get everything into the same CRS:
 
-Use method = "bilinear" for continuous variables, "ngm" for categorical
+Use method = "bilinear" for continuous variables
+Note: for thematic or categorical raster data, consider using method "ngm"
 ```{r}
-
 hi_par_84 <- projectRaster(hi_par, crs = wgs84, method = "bilinear")
 
 hi_chla_84 <- projectRaster(hi_chl, crs = wgs84, method = "bilinear")
 
 # Now we have PAR, Chl-a, and SST all in the same CRS (WGS84) and can start doing some simple algebra. 
-```
 
-Plot them side-by-side:
-```{r}
 par(mfrow = c(1,3))
 plot(hi_sst_84)
-plot(hi_chla_84)
 plot(hi_par_84)
+plot(hi_chla_84)
+
 ```
 
-Raster math is pretty straightforward: 
+1.6 Topicality
 ```{r}
 trop <- hi_par_84 + hi_sst_84 + 2*hi_chla_84
-plot(trop)
+#this gives back: Raster objects have different extents. Result for their intersection is returned
+#--> this means that if there is something in a cell on one layer, but not on another, it only adds if there's something in the cell - "only intersections are included"
+
+#scale now makes sense
+
 ```
+
 
 We can also explore some stuff about the raster data: 
 
@@ -142,18 +158,26 @@ hist(hi_sst_84)
 length(hi_sst_84)
 ```
 
+
+
+
+###And now for something completely different....
+
 And we might want to plot these in tmap instead: 
 
-Let's look at sea surface temperature. 
+2.1 Let's look at sea surface temperature. 
 ```{r}
 
+#look in folder called "islands", and layer within that
+#using sf- it'll keep geometry and polygons for us, but let's simplify
 islands <- read_sf(dsn = 'islands', layer = "Island_boundaries") %>% 
-  dplyr::select(Island) %>% 
+  dplyr::select(Island) %>%  #other "selects" present, so specify which package to pull "select" from
   st_simplify(dTolerance = 10) %>% 
   st_transform(crs = 4326)
 
 plot(islands)
 
+#static plotting
 tmap_mode("plot") # or switch to tmap_mode("view")
 
 tm_shape(hi_sst_84) +
@@ -175,15 +199,17 @@ sst_map <- tm_shape(hi_sst_84) +
   tm_shape(islands) +
   tm_fill("darkgreen")
 
+#see that tmap_save has a bunch of options to work with to modify the saved plot
 tmap_save(sst_map, "sst.png", height=5)
 
 ```
 
-Example: Conditional rasters and masking
 
-Let's say we have a sensitive species and we're trying to find suitable habitat. They like warm water (average temp >= 25.6 deg C) and PAR below 54.
 
+2.2 Conditional Rasters and Masking
+Let's say we have a sensitive species and we're trying to find suitable habitat. They like warm water (average temp >= 25.6 deg C) and PAR (solar radiation) below 54.
 ```{r}
+
 
 # Currently don't have matching extents, we need to update:
 extent(hi_sst_84) <- extent(hi_par_84)
@@ -203,23 +229,25 @@ sst_new <- resample(hi_sst_84, cr, method = "bilinear")
 compareRaster(sst_new, hi_par_84) # TRUE!
 ```
 
-Plot both of them, and crop to a smaller area (for better visualization):
+
+2.3 Plot both of them, and crop to a smaller area (for better visualization):
 ```{r}
 plot(sst_new)
 plot(hi_par_84)
 ```
 
-Create cropped versions:
+2.4 Create cropped versions:
 ```{r}
 # Created 'bounds_main' as earlier: 
 
 bounds_main <- as(extent(-159.9, -159.2, 21.7, 22.3), 'SpatialPolygons') # Keep in mind, this could be any polygon shape (state outline, county outline, etc.)
 
-# Reproject
+# Reproject - make sure crs of extent is the same as the area I'm cropping
 crs(bounds_main) <- crs(sst_new)
 
-par_kauai <- crop(hi_par_84, bounds_main)
-sst_kauai <- crop(sst_new, bounds_main)
+#now crop based on new projection
+par_kauai <- crop(hi_par_84, bounds_main) #cropped version of hi_par_84
+sst_kauai <- crop(sst_new, bounds_main) #cropped version of hi_sst_84; use sst_new which is the newer one I made line up perfectly with hi_par_84
 
 # Check out PAR:
 plot(par_kauai)
@@ -250,7 +278,7 @@ plot(sst_hab)
 
 So where are the suitable locations where these habitats overlap? raster::mask
 ```{r}
-suit_hab <- mask(sst_hab, par_hab)
+suit_hab <- mask(sst_hab, par_hab) #only keep areas that intersects between these two layers
 plot(suit_hab)
 ```
 
@@ -271,42 +299,45 @@ tm_shape(suit_hab) +
   
 ```
 
-###Part 2. Point pattern analysis
+###Part 3. Point pattern analysis - Tree Voles Data
 
 Get the spatial data (counties and red tree voles)
 ```{r}
 voles <- read_sf(dsn = 'redtreevoledata', layer = "ds033") %>% 
-  dplyr::select(COUNTY) %>% 
-  filter(COUNTY == "HUM") %>% 
-  st_transform(crs = 4326)
+  dplyr::select(COUNTY) %>% #geometry sticky so even when I just select county, it comes out with polygon data
+  filter(COUNTY == "HUM") %>% #select only Humboldt county
+  st_transform(crs = 4326) #we want the projection to be the correct one, transform using st_transform to...
 
-# plot(voles)
+plot(voles)
 
 # Get Humboldt County outline
 humboldt <- read_sf(dsn = 'redtreevoledata', layer = "california_county_shape_file") %>% 
   filter(NAME == "Humboldt") %>% 
-  dplyr::select(NAME)
+  dplyr::select(NAME) #now it only has one obs. named humboldt, and one polygon
 
+# there's no .prj file for this, so doesn't come with its own projection- we need to determine what we want
 st_crs(humboldt) <- 4326
+#now call humboldt in consol
+humboldt
 
 # plot(humboldt)
 
 # Plot them together: 
 tm_shape(humboldt) +
   tm_fill() +
-  tm_shape(voles) +
+  tm_shape(voles) + #want to plot voles data and county data together
   tm_dots(size = 0.2)
 
 # Or with ggplot2: 
 ggplot() +
   geom_sf(data = humboldt) +
-  geom_sf(data = voles) +
+  geom_sf(data = voles) 
   
 ggsave("humvoles.png", 
        units = "in", 
        width = 4, 
        height = 6, 
-       dpi = 300)
+       dpi = 300) #set resolution
 
 # Another example (with tiff...there's also jpeg, png, etc.)
 
@@ -321,23 +352,32 @@ ggplot() +
 
 ```
 
-We want to explore point patterns in a few different ways. Quadrats. Distance-based methods. 
+We want to explore point patterns in a few different ways. 
+-Quadrats. 
+-Distance-based methods (nearest neighbor, G-fxn and K-fxn)
 
 First we need to convert to 'ppp' and 'owin' - the points and windows, as used by maptools and spatstat (because sf is still catching up for raster and point pattern analysis stuff)
 ```{r}
 
-voles_sp <- as(voles,"Spatial")
-voles_ppp <- as(voles_sp, "ppp")
+voles_sp <- as(voles,"Spatial") #tell it to save as an *sp* class
+voles_ppp <- as(voles_sp, "ppp") #same
 
+#need to do point pattern analysis with a specific spatial window, cannot do it with unlimited field
 humboldt_sp <- as(humboldt, "Spatial")
 humboldt_win <- as(humboldt_sp, "owin")
 
-voles_pb <- ppp(voles_ppp$x, voles_ppp$y, window = humboldt_win)
+#create point pattern and bounding window- both needed for this analysis
+voles_pb <- ppp(voles_ppp$x, voles_ppp$y, window = humboldt_win) #humboldt window is humboldt_win
+class(voles_pb) #comes back "ppp" - good!
+plot(voles_pb) #let's look at it
 
-plot(voles_pb)
 
+#first test we'll do is a test of spatial eveness - splitting into grid, comparing across the grids; null hypothesis is evenness, not CSR
 vole_qt <- quadrat.test(voles_pb, nx = 5, ny = 10) # nx and ny are number of columns/rows for the rectangles created 
+#chi square becomes less robust with observations with low densities, so it'll allert us about that:
+#"Some expected counts are small; chi^2 approximation may be inaccurate"
 
+vole_qt 
 # Returns: VoleQT
 # Chi-squared test of CSR using quadrat counts
 
@@ -345,22 +385,29 @@ vole_qt <- quadrat.test(voles_pb, nx = 5, ny = 10) # nx and ny are number of col
 # X-squared = 425.94, df = 45, p-value < 2.2e-16
 # alternative hypothesis: two.sided 
 # Reject the null hypothesis of spatial evenness! But we still don't know if more clustered or more uniform...
+#p-val is very small, so it's unlikely we would have found intensities within regions as they are currently if spatial evenness was a real thing- so we conclude that these events do not reflect spatial evenness
 
 plot(voles_pb)
-plot(vole_qt, add = TRUE, cex = 0.4)
+plot(vole_qt, add = TRUE, cex = 0.4) #plot both grid and events together, and make text small- plot together
+#the num of the actual observations is in the top left of the square; then some metric of how many events we would expect to exist if there was spatial evenness
+#and then some value to reflect how much above or below the expected events the grid actually contains
+
+#for something like this we want not only to have the events, but also a bounding window so that it can evaluate how many events it expects in a single grid box- the boxes that aren't whole squares have a lower expected density than those that are whole (5.5, vs 4.5 or 3.1 ...)
 
 ```
 
-Plot densities: 
+Plot kernel densities for spatial data 
 ```{r}
-
-point_density <- density(voles_pb, sigma = 0.02)
+# Find point densities by voles_pb
+#set bandwidth for this: sigma
+point_density <- density(voles_pb, sigma = 0.02) #this sigma will either dilute or sharpen your heatmap; ALWAYS report the bandwidth the analysis used.
 plot(point_density)
 
 # Can you start viewing this in tmap? Yes, rasterize it: 
-wgs84 = "+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs"
+wgs84 = "+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs" #created earlier, so don't need to run this, but retyped
 vole_raster <- raster(point_density, crs = wgs84)
 
+#band width should be determined considering some biological justification that makes sense- say home range, or migration distance per day/season, or something similar...
 # Then plot: 
 tm_shape(vole_raster) +
   tm_raster(midpoint = NA, 
@@ -370,14 +417,21 @@ tm_shape(vole_raster) +
 ```
 
 Nearest neighbor (G-function)
+G-function: considers the distance of each observation to the NEAREST neighbor
+K-function: considers how close ALL neighboring observations are to an event (concentric circles)
 ```{r}
-r <- seq(0,0.15, by = 0.005)
+r <- seq(0,0.15, by = 0.005) #making a sequence of distances over which I'm going to calculate the g-fxn values
+#when you get to a certain distance, 100% of the observations will fall within the range of that point or closer...
 
+#envelope creates simulations of different functions that you select;
+#so here we'll be using it with the G-fxn to model something, and compare out data to it.
 gfunction <- envelope(voles_pb, fun = Gest, r = r, nsim = 100, nrank = 2) # Sig level of Monte Carlo = 0.04
+#r = radius distance, function is G-fxn (estimate), nsim = number of simulations
 
+#plot these on top of one-another, to see what they look like.
 plot(gfunction$obs ~ gfunction$r, type = "l", col = "black", lty = 11)
+lines(gfunction$theo ~ gfunction$r, type = "l", col = "red", lty = 6) #theoretical observations from csr as a fxn of "r"; #higher proportion of events exists with a nearest neighbor for closest neight for the actual data, compared to the modeled data (CSR). This indicates that our observations are more clustered than CSR. Not spatially random. 
 lines(gfunction$hi ~ gfunction$r, type = "l", col = "blue", lty = 8)
-lines(gfunction$theo ~ gfunction$r, type = "l", col = "red", lty = 6)
 lines(gfunction$lo ~ gfunction$r, type = "l", col = "green", lty = 4)
 
 # Confirms, in combination with quadrat.test, clustered data!
@@ -387,14 +441,17 @@ lines(gfunction$lo ~ gfunction$r, type = "l", col = "green", lty = 4)
 Nearest Neighbor by Ripley's K (using L standardization)
 
 ```{r}
+#K-fxn or (L-fxn) is more comprehensive when asking about CSR; because they ask how close ALL observtions are to an event within a spatial window
 r2 <- seq(0,0.5, by = 0.05)
 
 lfunction <- envelope(voles_pb, fun = Lest, r = r2, nsim = 20, rank = 2, global = TRUE)
 
 plot(lfunction$obs ~ lfunction$r, type = "l", col = "black", lty = 11)
-lines(lfunction$hi ~ lfunction$r, type = "l", col = "blue", lty = 8)
 lines(lfunction$theo ~ lfunction$r, type = "l", col = "red", lty = 6)
+lines(lfunction$hi ~ lfunction$r, type = "l", col = "blue", lty = 8)
 lines(lfunction$lo ~ lfunction$r, type = "l", col = "green", lty = 4)
+#similar to above results; our raw data is more higher than CSR, indicative of clustering;
+#so yes, this is more clustered for spatial independence "CSR"
 
 ```
 
@@ -403,22 +460,31 @@ Diggle-Cressie-Loosmore-Ford test of CSR
 
 DCLFTest <- dclf.test(voles_pb, nsim = 100, rank = 2) 
 DCLFTest
-
+#testing null-hypothesis of complete spatial randomness (CSR) and if p<0.05, there is no complete spatial randomness- there is some pattern to the distrubtion; from our observation, it looks like they are clustered, not uniform (and of course not CSR).
 ```
 
 
 ###Part 3. Kansas rainfall kriging 
 
-
+*SUPER IMPORTANT FOR BOBCAT STUFF!!!!*
 ```{r}
 # Get Kansas rainfall data
 ks_rain <- read_csv("KSRain2.csv")
-ks_sf  <-  st_as_sf(ks_rain, coords = c("LON", "LAT"), 
-                 crs = 4326)
+
+#convert to simple features data;View
+#convert foreign object to sf object
+ks_sf  <-  st_as_sf(ks_rain, coords = c("LON", "LAT"),
+                 crs = 4326) #give it LON and then LAT, in that order. then give it coordinate system
+
+plot(ks_sf)
+
+
 
 # Get county data
-ks_counties <- read_sf(dsn = 'KSCounties', layer = "ks_counties_shapefile")
+ks_counties <- read_sf(dsn = 'KSCounties', layer = "ks_counties_shapefile") #doesn't have a projection associated with it, so have to use st_crs, set to 4326
 st_crs(ks_counties) = 4326
+
+plot(ks_counties)
 
 # Plot with tmap:
 tm_shape(ks_counties) +
@@ -441,20 +507,22 @@ ggplot() +
 
 But we want to make predictions across the entire state using kriging. 
 
+###KRIGING
 First, make the rainfall data a Spatial Points data frame: 
 ```{r}
-ks_sp  <- as_Spatial(ks_sf)
+ks_sp  <- as_Spatial(ks_sf) #I was this to be a spatial points dataframe or as(, method = spatial) i think, check
 ```
 
 Then make a grid that we'll krige over:
 ```{r}
 # bbox(ks_sp) to check bounding box of the spatial points
-lat <- seq(37, 40, length.out = 200)
+#spatial grif to interpolate values over
+lat <- seq(37, 40, length.out = 200) #decided on area/resolution that makes sense considering bounding box of Kansas
 long <- seq(-94.6,-102, length.out = 200)
 
 # Then make it into a grid: 
 grid <- expand.grid(lon = long, lat = lat)
-grid_sf <- st_as_sf(grid, coords = c("lon","lat"), crs = 4326)
+grid_sf <- st_as_sf(grid, coords = c("lon","lat"), crs = 4326) #convert to sf object with coordinates (simple features object)
 grid_sp <- as_Spatial(grid_sf)
 
 ```
@@ -463,21 +531,23 @@ Then make a variogram:
 ```{r}
 
 # Create the variogram:
-ks_vgm <- variogram(AMT ~ 1, ks_sp)
+ks_vgm <- variogram(AMT ~ 1, ks_sp) # ordinary kriging is the most common krigin, and then you need to have it as a function of 1: i.e. ~1. 
 
 # Look at it: 
 plot(ks_vgm)
+# the weighting change over distance/time etc. The plot below shows the decay as a fxn of distance, the weight of each point towards modeling the data.
 
 # Fit the variogram model using reasonable estimates for nugget, sill and range:
 ks_vgm_fit <- fit.variogram(ks_vgm, model = vgm(nugget = 0.2, psill = 0.8, model = "Sph", range = 200))
-
+#p.sill is the level at which it's plateauing 
 # Plot them both together
 plot(ks_vgm, ks_vgm_fit) # Cool! So what are the values
 
+
 # Just FYI: there are other models (Gaussian, Exponential) - how do those line up? 
 ks_vgm_gau <- fit.variogram(ks_vgm, model = vgm(nugget = 0.2, psill = 0.8, model = "Gau", range = 200))
-
 plot(ks_vgm, ks_vgm_gau)
+
 
 # You can check the sum of squares of residuals for each: 
 attr(ks_vgm_fit, 'SSErr') # 0.00214 (and could compare to other models...)
@@ -488,8 +558,8 @@ ks_vgm_fit # Nugget = 0.102, sill = 0.954, range = 235
 
 Now, kriging! 
 ```{r}
-
-ks_krige <- krige(AMT ~ 1, ks_sp, grid_sp, model=ks_vgm_fit)
+#spatial interpolation 
+ks_krige <- krige(AMT ~ 1, ks_sp, grid_sp, model=ks_vgm_fit) #tells me it is "using ordinary kriging"
 
 ```
 
@@ -497,6 +567,9 @@ And visualize it:
 ```{r}
 
 ks_krige_df <- as.data.frame(ks_krige) # View it after this to show output
+View(ks_krige_df)
+#have long/lat, and var.1 rainfall, then var1.var is variance associated with predictor values
+
 
 # Rename things to make it a little nicer
 ks_krige_2 <- ks_krige_df %>% 
@@ -505,6 +578,9 @@ ks_krige_2 <- ks_krige_df %>%
 # Make this into spatial data again
 rain_predicted  <-  st_as_sf(ks_krige_2, coords = c("lon", "lat"), 
                  crs = 4326)
+
+plot(rain_predicted) #but this is just a square boundary we gave it; now we want to plant this only the actual kansas outline, and crop out pieces that don't belong
+
 
 # Get Kansas outline to crop: 
 ks <- read_sf(dsn = "states", layer = "cb_2017_us_state_20m") %>% 
@@ -519,7 +595,7 @@ rain_cropped <- st_intersection(rain_predicted, ks)
 plot(rain_cropped) # But this is points
 
 # So is this (cheating...)
-# tmap: 
+#tmap: 
   tm_shape(rain_cropped) +
   tm_dots("predicted", size = 0.05) +
   tm_shape(ks_counties) +
@@ -527,6 +603,9 @@ plot(rain_cropped) # But this is points
     tm_layout(legend.bg.color = "white", legend.position = c("left","bottom"))
 
 ```
+
+
+
 
 Extra...converting sf points to Spatial points to raster (with plotKML package): 
 
@@ -553,5 +632,3 @@ tm_shape(rain_raster_agg) +
 
 
 ```
-
-
